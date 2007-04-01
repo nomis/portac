@@ -1,0 +1,17 @@
+#include "config.h"
+
+void config() {
+	default_allow(port(0));
+	default_deny(ports(1, 1023));
+
+	allowP(port(0)); // not needed, it's just more efficient
+	allowPTG(ports(6010, 6999),	type(TCP),	group("ssh"));
+
+	allowPTU(port(22),		type(TCP),	user("root")); // sshd
+
+	allowPTU(port(953),		type(TCP),	user("named")); // rndc
+	allowPTU(port(80),		type(TCP),	user("thttpd"));
+
+	logP(ports(1, 65535));
+//	denyP(ports(1, 65535));
+}
