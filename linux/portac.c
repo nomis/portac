@@ -470,8 +470,7 @@ int portac_proc_commit(struct inode *inode, struct file *file) {
 	struct portac_proc_file *portac_file = file->private_data;
 	int ret = -EPERM;
 
-	if (mutex_lock_interruptible(&portac_config))
-		return -ERESTARTSYS;
+	mutex_lock(&portac_config);
 
 	BUG_ON(!in_config);
 
