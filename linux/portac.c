@@ -25,6 +25,8 @@
 # define dprintk(x, args...)
 #endif
 
+#define rprintk(x, args...) do { if (printk_ratelimit()) printk(KERN_INFO "portac: " x , ## args); } while(0)
+
 MODULE_DESCRIPTION("TCP/UDP port access control");
 MODULE_AUTHOR("Simon Arlott <portac@fire.lp0.eu>");
 MODULE_LICENSE("GPL");
@@ -116,8 +118,8 @@ int portac_check(u16 snum, unsigned short family, unsigned char protocol) {
 	int log = 0;
 
 	mutex_lock(&portac_acl);
-	dprintk("(check) port=%u uid=%u family=%u protocol=%u {\n",
-			snum, current->euid, family, protocol);
+	dprintk("(check) port=%u uid=%u euid=%u family=%u protocol=%u {\n",
+			snum, current->uid, current->euid, family, protocol);
 
 	while (tmp != NULL) {
 		struct portac_entry *entry = tmp;
@@ -136,7 +138,8 @@ int portac_check(u16 snum, unsigned short family, unsigned char protocol) {
 				entry->uid, entry->grp,
 				entry->sport, entry->eport);
 
-		if (PORTAC_FLAG(entry, PORTAC_UID) && current->euid != entry->uid) {
+		if (PORTAC_FLAG(entry, PORTAC_UID)
+				&& (current->uid != entry->uid && current->euid != entry->uid)) {
 			dprintk(" : uid does not match\n");
 			continue;
 		}
@@ -156,7 +159,8 @@ int portac_check(u16 snum, unsigned short family, unsigned char protocol) {
 
 		if (!(
 				(PORTAC_FLAG(entry, PORTAC_TCP4|PORTAC_TCP6) && protocol == IPPROTO_TCP)
-					|| (PORTAC_FLAG(entry, PORTAC_UDP4|PORTAC_UDP6) && protocol == IPPROTO_UDP))
+					|| (PORTAC_FLAG(entry, PORTAC_UDP4|PORTAC_UDP6) && protocol == IPPROTO_UDP)
+					|| (PORTAC_FLAG(entry, PORTAC_UDP4|PORTAC_UDP6) && protocol == IPPROTO_UDPLITE))
 				) {
 			dprintk(" : protocol does not match\n");
 			continue;
@@ -171,9 +175,9 @@ int portac_check(u16 snum, unsigned short family, unsigned char protocol) {
 			dprintk(" : DENY\n");
 			dprintk("}\n");
 			if (log)
-				printk("portac: DENY uid=%u family=%s proto=%s port=%u\n",
-					current->uid, family == PF_INET ? "INET" : "INET6",
-					protocol == IPPROTO_TCP ? "TCP" : "UDP", snum);
+				rprintk("DENY uid=%u euid=%u family=%s proto=%s port=%u\n",
+					current->uid, current->euid, family == PF_INET ? "INET" : "INET6",
+					protocol == IPPROTO_TCP ? "TCP" : protocol == IPPROTO_UDP ? "UDP" : "UDPLITE", snum);
 			mutex_unlock(&portac_acl);
 			return -EACCES;
 		} else if (PORTAC_FLAG(entry, PORTAC_LOG)) {
@@ -183,9 +187,9 @@ int portac_check(u16 snum, unsigned short family, unsigned char protocol) {
 			dprintk(" : ALLOW\n");
 			dprintk("}\n");
 			if (log)
-				printk("portac: ALLOW uid=%u family=%s proto=%s port=%u\n",
-					current->uid, family == PF_INET ? "INET" : "INET6",
-					protocol == IPPROTO_TCP ? "TCP" : "UDP", snum);
+				rprintk("ALLOW uid=%u euid=%u family=%s proto=%s port=%u\n",
+					current->uid, current->euid, family == PF_INET ? "INET" : "INET6",
+					protocol == IPPROTO_TCP ? "TCP" : protocol == IPPROTO_UDP ? "UDP" : "UDPLITE", snum);
 			mutex_unlock(&portac_acl);
 			return 0;
 		}
@@ -196,27 +200,27 @@ int portac_check(u16 snum, unsigned short family, unsigned char protocol) {
 			dprintk(" : DENY\n");
 			dprintk("}\n");
 			if (log)
-				printk("portac: DENY uid=%u family=%s proto=%s port=%u\n",
-					current->uid, family == PF_INET ? "INET" : "INET6",
-					protocol == IPPROTO_TCP ? "TCP" : "UDP", snum);
+				rprintk("DENY uid=%u euid=%u family=%s proto=%s port=%u\n",
+					current->uid, current->euid, family == PF_INET ? "INET" : "INET6",
+					protocol == IPPROTO_TCP ? "TCP" : protocol == IPPROTO_UDP ? "UDP" : "UDPLITE", snum);
 			mutex_unlock(&portac_acl);
 			return -EACCES;
 		} else {
 			dprintk(" : ALLOW\n");
 			dprintk("}\n");
 			if (log)
-				printk("portac: ALLOW uid=%u family=%s proto=%s port=%u\n",
-					current->uid, family == PF_INET ? "INET" : "INET6",
-					protocol == IPPROTO_TCP ? "TCP" : "UDP", snum);
+				rprintk("ALLOW uid=%u euid=%u family=%s proto=%s port=%u\n",
+					current->uid, current->euid, family == PF_INET ? "INET" : "INET6",
+					protocol == IPPROTO_TCP ? "TCP" : protocol == IPPROTO_UDP ? "UDP" : "UDPLITE", snum);
 		}
 	} else {
 		dprintk(" (default)\n");
 		dprintk(" : ALLOW\n");
 		dprintk("}\n");
 		if (log)
-			printk("portac: ALLOW uid=%u family=%s proto=%s port=%u\n",
-				current->uid, family == PF_INET ? "INET" : "INET6",
-				protocol == IPPROTO_TCP ? "TCP" : "UDP", snum);
+			rprintk("ALLOW uid=%u euid=%u family=%s proto=%s port=%u\n",
+				current->uid, current->euid, family == PF_INET ? "INET" : "INET6",
+				protocol == IPPROTO_TCP ? "TCP" : protocol == IPPROTO_UDP ? "UDP" : "UDPLITE", snum);
 	}
 	mutex_unlock(&portac_acl);
 	return 0;
@@ -484,12 +488,12 @@ int portac_proc_commit(struct inode *inode, struct file *file) {
 				|| portac_file->data[1] != PORTAC_IFVER
 				|| portac_file->size < 4 + sizeof(default_action)) {
 			ret = -EINVAL;
-			printk(KERN_INFO "portac: Invalid ACL format\n");
+			printk(KERN_NOTICE "portac: Invalid ACL format\n");
 		}
 
 		if ((portac_file->size - (4 + sizeof(default_action))) % 13 != 0) {
 			ret = -EINVAL;
-			printk(KERN_INFO "portac: ACL does not contain whole records\n");
+			printk(KERN_NOTICE "portac: ACL does not contain whole records\n");
 		}
 
 		if (!ret) {
@@ -497,7 +501,7 @@ int portac_proc_commit(struct inode *inode, struct file *file) {
 			count = ntohs(count);
 			if (count != records) {
 				ret = -EINVAL;
-				printk(KERN_INFO "portac: ACL header record count mismatch %u != %u\n", count, records);
+				printk(KERN_NOTICE "portac: ACL header record count mismatch %u != %u\n", count, records);
 			}
 		}
 		
@@ -508,7 +512,7 @@ int portac_proc_commit(struct inode *inode, struct file *file) {
 			size_t pos = 4 + sizeof(default_action);
 
 			mutex_lock(&portac_acl);
-			printk(KERN_INFO "portac: Reloading ACL (%u records)\n", records);
+			printk(KERN_NOTICE "portac: Reloading ACL (%u records)\n", records);
 
 			while (records > 0) {
 				u16 sp, ep;
@@ -584,7 +588,7 @@ static int __init portac_init_module(void)
 
 	/* initialise default_action based on default_deny_ports */
 	if (default_deny_ports < 0 || default_deny_ports > 65535) {
-		printk(KERN_INFO "portac: default_deny_ports must be 0-65535\n");
+		printk(KERN_NOTICE "portac: default_deny_ports must be 0-65535\n");
 		return -EINVAL;
 	} else if (default_deny_ports > 0) {
 		default_deny_ports++;
@@ -598,7 +602,7 @@ static int __init portac_init_module(void)
 
 	proc_file = create_proc_entry(KBUILD_MODNAME, S_IWUSR, proc_net);
 	if (proc_file == NULL) {
-		printk(KERN_INFO "Failure creating /proc/%s.\n", KBUILD_MODNAME);
+		printk(KERN_NOTICE "Failure creating /proc/%s.\n", KBUILD_MODNAME);
 		return -ENOMEM;
 	}
 	proc_file->proc_fops = &portac_proc_fops;
@@ -607,7 +611,7 @@ static int __init portac_init_module(void)
 	if (register_security(&portac_ops)) {
 		/* try registering with primary module */
 		if (mod_reg_security(KBUILD_MODNAME, &portac_ops)) {
-			printk(KERN_INFO "Failure registering portac "
+			printk(KERN_NOTICE "Failure registering portac "
 					"with primary security module.\n");
 			return -EINVAL;
 		}
@@ -631,13 +635,13 @@ static void __exit portac_exit_module(void)
 	/* remove ourselves from the security framework */
 	if (secondary) {
 		if (mod_unreg_security(KBUILD_MODNAME, &portac_ops))
-			printk(KERN_INFO "Failure unregistering portac "
+			printk(KERN_NOTICE "Failure unregistering portac "
 					"with primary module.\n");
 		return;
 	}
 
 	if (unregister_security(&portac_ops)) {
-		printk(KERN_INFO
+		printk(KERN_NOTICE
 			"Failure unregistering portac with the kernel\n");
 	}
 }
