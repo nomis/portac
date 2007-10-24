@@ -626,6 +626,7 @@ static int __init portac_init_module(void)
 
 static void __exit portac_exit_module(void)
 {
+	struct portac_entry *tmp;
 	/* If rmmod --force is used, secondary_ops
 	 * is probably not NULL, but this won't matter.
 	 */
@@ -643,6 +644,13 @@ static void __exit portac_exit_module(void)
 	if (unregister_security(&portac_ops)) {
 		printk(KERN_NOTICE
 			"Failure unregistering portac with the kernel\n");
+		return;
+	}
+
+	while (portac_entries != NULL) {
+		tmp = portac_entries->next;
+		kfree(portac_entries);
+		portac_entries = tmp;
 	}
 }
 
