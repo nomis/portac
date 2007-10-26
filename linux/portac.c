@@ -125,42 +125,41 @@ int portac_check(u16 snum, unsigned short family, unsigned char protocol) {
 		struct portac_entry *entry = tmp;
 		tmp = tmp->next;
 
-		dprintk(" > user flags=%s%s%s%s%s%s%s%s(uid=%u grp=%u sport=%u eport=%u)\n",
-				PORTAC_FLAG(entry, PORTAC_TCP4) ? "tcp4 " : "",
-				PORTAC_FLAG(entry, PORTAC_UDP4) ? "udp4 " : "",
-				PORTAC_FLAG(entry, PORTAC_TCP6) ? "tcp6 " : "",
-				PORTAC_FLAG(entry, PORTAC_UDP6) ? "udp6 " : "",
-				PORTAC_FLAG(entry, PORTAC_UID) ? "uid " : "",
-				PORTAC_FLAG(entry, PORTAC_GRP) ? "grp " : "",
-				PORTAC_FLAG(entry, PORTAC_LOG) ? "log " : "",
-				PORTAC_FLAG(entry, PORTAC_TCP4|PORTAC_UDP4|PORTAC_TCP6|PORTAC_UDP6
-					|PORTAC_UID|PORTAC_GRP|PORTAC_LOG) ? "" : " ",
+		dprintk(" > user matches=%s%s%s%s%s%s%s%s(uid=%u grp=%u sport=%u eport=%u)\n",
+				PORTAC_MATCH_ISSET(entry, PORTAC_MATCH_TCP) ? "tcp " : "",
+				PORTAC_MATCH_ISSET(entry, PORTAC_MATCH_UDP) ? "udp " : "",
+				PORTAC_MATCH_ISSET(entry, PORTAC_MATCH_IP4) ? "ip4 " : "",
+				PORTAC_MATCH_ISSET(entry, PORTAC_MATCH_IP6) ? "ip6 " : "",
+				PORTAC_MATCH_ISSET(entry, PORTAC_MATCH_UID) ? "uid " : "",
+				PORTAC_MATCH_ISSET(entry, PORTAC_MATCH_GRP) ? "grp " : "",
+				PORTAC_FLAG(entry, PORTAC_FLAG_LOG) ? "log " : "",
+				(PORTAC_MATCH_ISSET(entry, ~0) || PORTAC_FLAG_MATCH(entry, ~0)) ? "" : " ",
 				entry->uid, entry->grp,
 				entry->sport, entry->eport);
 
-		if (PORTAC_FLAG(entry, PORTAC_UID)
+		if (PORTAC_MATCH_ISSET(entry, PORTAC_MATCH_UID)
 				&& (current->uid != entry->uid && current->euid != entry->uid)) {
 			dprintk(" : uid does not match\n");
 			continue;
 		}
 
-		if (PORTAC_FLAG(entry, PORTAC_GRP) && !in_egroup_p(entry->grp)) {
+		if (PORTAC_MATCH_ISSET(entry, PORTAC_MATCH_GRP) && !in_egroup_p(entry->grp)) {
 			dprintk(" : grp does not match\n");
 			continue;
 		}
 
 		if (!(
-				(PORTAC_FLAG(entry, PORTAC_TCP4|PORTAC_UDP4) && family == PF_INET)
-					|| (PORTAC_FLAG(entry, PORTAC_TCP6|PORTAC_UDP6) && family == PF_INET6))
+				(PORTAC_MATCH_ISSET(entry, PORTAC_MATCH_IP4) && family == PF_INET)
+					|| (PORTAC_MATCH_ISSET(entry, PORTAC_MATCH_IP6) && family == PF_INET6))
 				) {
 			dprintk(" : family does not match\n");
 			continue;
 		}
 
 		if (!(
-				(PORTAC_FLAG(entry, PORTAC_TCP4|PORTAC_TCP6) && protocol == IPPROTO_TCP)
-					|| (PORTAC_FLAG(entry, PORTAC_UDP4|PORTAC_UDP6) && protocol == IPPROTO_UDP)
-					|| (PORTAC_FLAG(entry, PORTAC_UDP4|PORTAC_UDP6) && protocol == IPPROTO_UDPLITE))
+				(PORTAC_MATCH_ISSET(entry, PORTAC_MATCH_TCP) && protocol == IPPROTO_TCP)
+					|| (PORTAC_MATCH_ISSET(entry, PORTAC_MATCH_UDP) && protocol == IPPROTO_UDP)
+					|| (PORTAC_MATCH_ISSET(entry, PORTAC_MATCH_UDP) && protocol == IPPROTO_UDPLITE))
 				) {
 			dprintk(" : protocol does not match\n");
 			continue;
@@ -171,7 +170,7 @@ int portac_check(u16 snum, unsigned short family, unsigned char protocol) {
 			continue;
 		}
 
-		if (PORTAC_FLAG(entry, PORTAC_DENY)) {
+		if (entry->action == PORTAC_DENY) {
 			dprintk(" : DENY\n");
 			dprintk("}\n");
 			if (log)
@@ -180,7 +179,7 @@ int portac_check(u16 snum, unsigned short family, unsigned char protocol) {
 					protocol == IPPROTO_TCP ? "TCP" : protocol == IPPROTO_UDP ? "UDP" : "UDPLITE", snum);
 			mutex_unlock(&portac_acl);
 			return -EACCES;
-		} else if (PORTAC_FLAG(entry, PORTAC_LOG)) {
+		} else if (PORTAC_FLAG_ISSET(entry, PORTAC_FLAG_LOG)) {
 			dprintk(" : LOG\n");
 			log = 1;
 		} else {
