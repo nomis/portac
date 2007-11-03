@@ -11,7 +11,7 @@ void commit(void);
 void abort_(void);
 void op_add(void);
 void op_del(void);
-void help(int ret);
+void help(void);
 
 void rule_init(void);
 void action_allow(void);

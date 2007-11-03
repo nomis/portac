@@ -7,7 +7,8 @@ YACC=bison
 LFLAGS=-i --nounput
 YFLAGS=-v -d
 CFLAGS=-I/usr/local/include -Wall -g -O0
-LDFLAGS=-L/usr/local/lib -lnl
+LDFLAGS=-L/usr/local/lib 
+#-lnl
 PREFIX=/usr/local
 BINDIR=$(PREFIX)/bin
 MANDIR=$(PREFIX)/man
@@ -15,7 +16,7 @@ MANDIR=$(PREFIX)/man
 .SUFFIXES: %.l __%-l.c %.y __%-y.c __%-y.h
 
 portac: src/portac.o src/__commands-l.o src/__commands-y.o
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
 
 src/portac.c: src/portac.h
 src/__commands.y: src/portac.h

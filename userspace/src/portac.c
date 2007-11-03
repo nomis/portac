@@ -29,8 +29,8 @@ static u_int16_t sport;
 static u_int16_t eport;
 static u_int64_t uid;
 static u_int64_t gid;
-static struct in_addr *ip4;
-static struct in6_addr *ip6;
+static struct in_addr *ip4 = NULL;
+static struct in6_addr *ip6 = NULL;
 
 static void inline quit(const char *msg) { fprintf(stderr, "%s\n", msg); fflush(stderr); _exit(1); }
 static void inline quit_if(int expr, const char *msg) { if (expr) quit(msg); }
@@ -78,7 +78,7 @@ int main(int argc, char *argv[]) {
 		cmdlen += len;
 	}
 	if (cmdlen == 0)
-		help(0);
+		help();
 
 	/* add null padding for flex */
 	cmd = realloc(cmd, sizeof(char) * cmdlen + pad);
@@ -89,57 +89,54 @@ int main(int argc, char *argv[]) {
 	/* parse command */
 	yylex_init(&scanner);
 	yy_scan_buffer(cmd, cmdlen, scanner);
-	yyparse(scanner);
+	i = yyparse(scanner);
 	yylex_destroy(scanner);
 	free(cmd);
 
-	return 0;
+	return i;
 }
 
-void help(int ret) {
-	FILE *out = ret == 0 ? stdout : stderr;
-
-	/*            0         1         2         3         4         5         6         7         8 */
-	FPRINTF(out, "Usage: %s ...\n", name);
-	FPRINTF(out, "  list                        Lists current rules.\n");
-	FPRINTF(out, "  default [action] [flags]    Gets/sets default action/flags.\n");
-	FPRINTF(out, "  load [filename]             Loads rules from stdin or 'filename'.\n");
-	FPRINTF(out, "  save <filename>             Saves rules to 'filename'.\n");
-	FPRINTF(out, "\n");
-	FPRINTF(out, "  add <action> [matches...]   Append rule.\n");
-	FPRINTF(out, "  del <action> [matches...]   Delete rule.\n");
-	FPRINTF(out, "\n");
-	FPRINTF(out, "Additional commands available in 'load' mode:\n");
-	FPRINTF(out, "  begin             Start a list of rule operations.\n");
-	FPRINTF(out, "  clear             Clear the current rules before applying the list.\n");
-	FPRINTF(out, "  abort             Abort list and exit.\n");
-	FPRINTF(out, "  commit            Finish the list, apply it and exit.\n");
-	FPRINTF(out, "\n");
-	FPRINTF(out, "Actions:\n");
-	FPRINTF(out, "  allow             Allow access.\n");
-	FPRINTF(out, "  deny              Deny access.\n");
-	FPRINTF(out, "  cap               Require CAP_NET_BIND_SERVICE for access.\n");
-	FPRINTF(out, "                    (When used as the default action, access\n");
-	FPRINTF(out, "                    is always allowed for ports below 1024.)\n");
-	FPRINTF(out, "  log               Continue with next rule, but log end result.\n");
-	FPRINTF(out, "                    (Equivalent to 'cap' above if used as default.)\n");
-	FPRINTF(out, "\n");
-	FPRINTF(out, "Matches:\n");
-	FPRINTF(out, "  port <from>[:to]  Port range, inclusive. (bind() 1-65535, listen() 0 only)\n");
-	FPRINTF(out, "  tcp               TCP protocol.\n");
-	FPRINTF(out, "  udp               UDP/UDPLITE protocol.\n");
-	FPRINTF(out, "  uid <id>          User with uid 'id'.\n");
-	FPRINTF(out, "  user <name>       User with username 'name'.\n");
-	FPRINTF(out, "  gid <id>          User member of group with gid 'id'.\n");
-	FPRINTF(out, "  group <name>      User member of group with name 'name'.\n");
-	FPRINTF(out, "  ip4 [host]        IPv4 protocol, bound IP. Host may be 'all' for 0.0.0.0.\n");
-	FPRINTF(out, "  ip6 [host]        IPv6 protocol, bound IP. Host may be 'all' for ::.\n");
-	FPRINTF(out, "\n");
-	FPRINTF(out, "Flags:\n");
-	FPRINTF(out, "  log               Log the result of this rule if matched.\n");
-
-	FFLUSH(out);
-	_exit(ret);
+void help(void) {
+	/*               0         1         2         3         4         5         6         7         8 */
+	FPRINTF(stdout, "Usage: %s ...\n", name);
+	FPRINTF(stdout, "  list                        Lists current rules.\n");
+	FPRINTF(stdout, "  default [action] [flags]    Gets/sets default action/flags.\n");
+	FPRINTF(stdout, "  load [filename]             Loads rules from stdin or 'filename'.\n");
+	FPRINTF(stdout, "  save <filename>             Saves rules to 'filename'.\n");
+	FPRINTF(stdout, "\n");
+	FPRINTF(stdout, "  add <action> [matches...]   Append rule.\n");
+	FPRINTF(stdout, "  del <action> [matches...]   Delete rule.\n");
+	FPRINTF(stdout, "\n");
+	FPRINTF(stdout, "Additional commands available in 'load' mode:\n");
+	FPRINTF(stdout, "  begin             Start a list of rule operations.\n");
+	FPRINTF(stdout, "  clear             Clear the current rules before applying the list.\n");
+	FPRINTF(stdout, "  abort             Abort list and exit.\n");
+	FPRINTF(stdout, "  commit            Finish the list, apply it and exit.\n");
+	FPRINTF(stdout, "\n");
+	FPRINTF(stdout, "Actions:\n");
+	FPRINTF(stdout, "  allow             Allow access.\n");
+	FPRINTF(stdout, "  deny              Deny access.\n");
+	FPRINTF(stdout, "  cap               Require CAP_NET_BIND_SERVICE for access.\n");
+	FPRINTF(stdout, "                    (When used as the default action, access\n");
+	FPRINTF(stdout, "                    is always allowed for ports below 1024.)\n");
+	FPRINTF(stdout, "  log               Continue with next rule, but log end result.\n");
+	FPRINTF(stdout, "                    (Equivalent to 'cap' above if used as default.)\n");
+	FPRINTF(stdout, "\n");
+	FPRINTF(stdout, "Matches:\n");
+	FPRINTF(stdout, "  port <from>[:to]  Port range, inclusive. (bind() 1-65535, listen() 0 only)\n");
+	FPRINTF(stdout, "  tcp               TCP protocol.\n");
+	FPRINTF(stdout, "  udp               UDP/UDPLITE protocol.\n");
+	FPRINTF(stdout, "  uid <id>          User with uid 'id'.\n");
+	FPRINTF(stdout, "  user <name>       User with username 'name'.\n");
+	FPRINTF(stdout, "  gid <id>          User member of group with gid 'id'.\n");
+	FPRINTF(stdout, "  group <name>      User member of group with name 'name'.\n");
+	FPRINTF(stdout, "  ip4 [host]        IPv4 protocol, bound IP. Host may be 'all' for 0.0.0.0.\n");
+	FPRINTF(stdout, "  ip6 [host]        IPv6 protocol, bound IP. Host may be 'all' for ::.\n");
+	FPRINTF(stdout, "\n");
+	FPRINTF(stdout, "Flags:\n");
+	FPRINTF(stdout, "  log               Log the result of this rule if matched.\n");
+	FFLUSH(stdout);
+	_exit(0);
 }
 
 void list(void) {
@@ -150,6 +147,7 @@ void load(const char *filename) {
 
 	if (!strcmp(filename, "-")) {
 		in = stdin;
+		filename = NULL;
 	} else {
 		in = fopen(filename, "r");
 		pquit_if(!in, filename);
@@ -162,18 +160,19 @@ void save(const char *filename) {
 
 	if (!strcmp(filename, "-")) {
 		out = stdout;
+		filename = NULL;
 	} else {
 		out = fopen(filename, "w");
 		pquit_if(!out, filename);
 	}
 
-	FPRINTF(out, "# Generated by portac v%s at %ld\n", PORTAC_VERSION, time(NULL));
+	pquit_if(fprintf(out, "# Generated by portac v%s at %ld\n", PORTAC_VERSION, time(NULL)) < 0, filename);
 	list_out = out;
 	list();
-	FPRINTF(out, "# Completed at %ld\n", time(NULL));
+	pquit_if(fprintf(out, "# Completed at %ld\n", time(NULL)) < 0, filename);
 
-	FFLUSH(out);
-	_exit(0);
+	pquit_if(fflush(out) != 0, filename);
+	pquit_if(fclose(out) != 0, filename);
 }
 void get_default(void) {}
 void set_default(void) {}
